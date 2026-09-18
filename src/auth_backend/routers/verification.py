@@ -149,3 +149,35 @@ async def resubmit(
         document_back_content_type=document_back.content_type if document_back else None,
     )
     return VerificationRequestResponse.model_validate(request)
+
+
+
+@router.get(
+    "/file/{path:path}",
+    summary="Télécharger un fichier de vérification (URL signée)",
+)
+async def download_file(
+    path: str,
+    exp: int,
+    sig: str,
+    db: AsyncSession = Depends(get_db),
+    config: AuthConfig = Depends(get_auth_config),
+):
+    """Sert un fichier déchiffré via une URL signée temporaire.
+
+    L'URL est générée par l'admin lors de l'appel à
+    /admin/verifications/{id}. Elle est valide 15 minutes.
+    """
+    from fastapi import HTTPException
+    from fastapi.responses import Response
+
+    from ..services.storage_service import StorageService
+    from ..services.verification_service import verify_signed_url
+
+    if not verify_signed_url(path, exp, sig, config):
+        raise HTTPException(status_code=403, detail="URL invalide ou expirée.")
+
+    storage = StorageService(config)
+    content = storage.read_file(path)
+
+    return Response(content=content, media_type="image/jpeg")

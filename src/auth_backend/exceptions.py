@@ -301,3 +301,13 @@ class StorageError(AuthError):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=detail,
         )
+        
+        
+        
+        
+class VerificationAdminActionError(AuthError):
+    def __init__(self, detail: str = "Action impossible sur cette demande.") -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )

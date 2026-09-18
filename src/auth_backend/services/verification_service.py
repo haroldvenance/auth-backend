@@ -9,12 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import AuthConfig
 from ..exceptions import (
+    VerificationAdminActionError,
     VerificationAlreadyPendingError,
     VerificationAlreadyVerifiedError,
     VerificationDuplicateDocumentError,
     VerificationMaxAttemptsError,
     VerificationNotFoundError,
 )
+
 from ..models import User, VerificationRequest
 from ..security import hash_document_number
 from .storage_service import StorageService
@@ -189,3 +191,303 @@ async def resubmit(
 
     # Créer une nouvelle demande (le compteur de tentatives est déjà incrémenté)
     return await submit(db, user, config, **kwargs)
+
+
+
+
+# ============================================================
+# Admin
+# ============================================================
+async def list_requests(
+    db: AsyncSession,
+    *,
+    status: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    """Liste paginée des demandes de vérification (admin)."""
+    from sqlalchemy import func
+
+    page = max(1, page)
+    page_size = min(max(1, page_size), 100)
+
+    base_query = select(VerificationRequest)
+    count_query = select(func.count(VerificationRequest.id))
+
+    if status:
+        base_query = base_query.where(VerificationRequest.status == status)
+        count_query = count_query.where(VerificationRequest.status == status)
+
+    # Total
+    total_result = await db.execute(count_query)
+    total = total_result.scalar_one()
+
+    # Pagination
+    offset = (page - 1) * page_size
+    base_query = (
+        base_query
+        .order_by(VerificationRequest.created_at.asc())  # FIFO
+        .offset(offset)
+        .limit(page_size)
+    )
+    result = await db.execute(base_query)
+    requests = list(result.scalars())
+
+    # Charger les users associés
+    from ..models import User
+    items = []
+    now = _utcnow()
+    for req in requests:
+        user = await db.get(User, req.user_id)
+        waiting = (now - req.created_at).total_seconds() / 3600 if req.created_at else 0
+        items.append({
+            "id": req.id,
+            "user_id": req.user_id,
+            "user_email": user.email if user else None,
+            "user_display_name": user.display_name if user else "?",
+            "full_name": req.full_name,
+            "document_type": req.document_type,
+            "status": req.status,
+            "created_at": req.created_at,
+            "reviewed_at": req.reviewed_at,
+            "waiting_hours": round(waiting, 1),
+            "attempts": user.verification_attempts if user else 0,
+        })
+
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
+
+
+async def get_request_detail(
+    db: AsyncSession,
+    request_id: "UUID",
+    config: AuthConfig,
+) -> dict:
+    """Détails d'une demande + URLs signées temporaires."""
+    from uuid import UUID as UUIDType
+
+    stmt = select(VerificationRequest).where(VerificationRequest.id == request_id)
+    result = await db.execute(stmt)
+    req = result.scalar_one_or_none()
+    if not req:
+        raise VerificationNotFoundError()
+
+    user = await db.get(User, req.user_id)
+    now = _utcnow()
+    waiting = (now - req.created_at).total_seconds() / 3600 if req.created_at else 0
+
+    # Générer des URLs signées (HMAC) valides 15 minutes
+    selfie_url = _sign_file_url(req.selfie_path, config, ttl_seconds=900)
+    front_url = _sign_file_url(req.document_front_path, config, ttl_seconds=900)
+    back_url = (
+        _sign_file_url(req.document_back_path, config, ttl_seconds=900)
+        if req.document_back_path else None
+    )
+
+    return {
+        "id": req.id,
+        "user_id": req.user_id,
+        "user_email": user.email if user else None,
+        "user_display_name": user.display_name if user else "?",
+        "user_created_at": user.created_at if user else now,
+        "user_verified": user.is_verified if user else False,
+        "full_name": req.full_name,
+        "date_of_birth": req.date_of_birth,
+        "document_type": req.document_type,
+        "status": req.status,
+        "rejection_reason": req.rejection_reason,
+        "admin_notes": req.admin_notes,
+        "selfie_url": selfie_url,
+        "document_front_url": front_url,
+        "document_back_url": back_url,
+        "created_at": req.created_at,
+        "reviewed_at": req.reviewed_at,
+        "reviewed_by": req.reviewed_by,
+        "waiting_hours": round(waiting, 1),
+    }
+
+
+def _sign_file_url(path: str, config: AuthConfig, ttl_seconds: int = 900) -> str:
+    """Crée une URL signée temporaire pour accéder à un fichier chiffré.
+
+    Le format est : /api/v1/auth/verification/file/{path}?exp={ts}&sig={hmac}
+    L'admin doit fournir cette URL pour télécharger le fichier déchiffré.
+    """
+    import hashlib
+    import hmac
+    import time
+    from urllib.parse import quote
+
+    expires = int(time.time()) + ttl_seconds
+    message = f"{path}:{expires}".encode()
+    sig = hmac.new(
+        config.secret_key.encode(),
+        message,
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{config.api_prefix}/verification/file/{quote(path)}?exp={expires}&sig={sig}"
+
+
+def verify_signed_url(
+    path: str,
+    exp: int,
+    sig: str,
+    config: AuthConfig,
+) -> bool:
+    """Vérifie une URL signée."""
+    import hashlib
+    import hmac
+    import time
+
+    if exp < int(time.time()):
+        return False
+    message = f"{path}:{exp}".encode()
+    expected = hmac.new(
+        config.secret_key.encode(),
+        message,
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, sig)
+
+
+async def approve_request(
+    db: AsyncSession,
+    request_id: "UUID",
+    admin: User,
+    admin_notes: str | None = None,
+) -> VerificationRequest:
+    """Approuve une demande et marque l'utilisateur comme vérifié."""
+    stmt = select(VerificationRequest).where(VerificationRequest.id == request_id)
+    result = await db.execute(stmt)
+    req = result.scalar_one_or_none()
+    if not req:
+        raise VerificationNotFoundError()
+
+    if req.status != "pending":
+        raise VerificationAdminActionError(
+            f"Cette demande est déjà '{req.status}'. Seules les demandes 'pending' peuvent être traitées."
+        )
+
+    req.status = "approved"
+    req.reviewed_by = admin.id
+    req.reviewed_at = _utcnow()
+    if admin_notes:
+        req.admin_notes = admin_notes
+
+    # Mettre à jour l'utilisateur
+    user = await db.get(User, req.user_id)
+    if user:
+        user.is_verified = True
+        user.verification_status = "verified"
+        user.verified_at = _utcnow()
+        user.updated_at = _utcnow()
+
+    await db.commit()
+    await db.refresh(req)
+    return req
+
+
+async def reject_request(
+    db: AsyncSession,
+    request_id: "UUID",
+    admin: User,
+    reason: str,
+    admin_notes: str | None = None,
+) -> VerificationRequest:
+    """Rejette une demande avec un motif."""
+    stmt = select(VerificationRequest).where(VerificationRequest.id == request_id)
+    result = await db.execute(stmt)
+    req = result.scalar_one_or_none()
+    if not req:
+        raise VerificationNotFoundError()
+
+    if req.status != "pending":
+        raise VerificationAdminActionError(
+            f"Cette demande est déjà '{req.status}'."
+        )
+
+    req.status = "rejected"
+    req.rejection_reason = reason
+    req.reviewed_by = admin.id
+    req.reviewed_at = _utcnow()
+    if admin_notes:
+        req.admin_notes = admin_notes
+
+    # Mettre à jour l'utilisateur
+    user = await db.get(User, req.user_id)
+    if user:
+        user.verification_status = "rejected"
+        user.updated_at = _utcnow()
+
+    await db.commit()
+    await db.refresh(req)
+    return req
+
+
+async def get_stats(db: AsyncSession) -> dict:
+    """Statistiques globales du back-office."""
+    from sqlalchemy import func
+
+    # Compteurs par statut
+    statuses = ["pending", "approved", "rejected"]
+    counts = {}
+    for s in statuses:
+        stmt = select(func.count(VerificationRequest.id)).where(
+            VerificationRequest.status == s
+        )
+        result = await db.execute(stmt)
+        counts[s] = result.scalar_one()
+
+    total = sum(counts.values())
+
+    # Taux d'approbation (parmi les traitées)
+    treated = counts["approved"] + counts["rejected"]
+    approval_rate = (counts["approved"] / treated * 100) if treated > 0 else 0.0
+
+    # Temps d'attente moyen des pending
+    stmt_wait = select(VerificationRequest.created_at).where(
+        VerificationRequest.status == "pending"
+    )
+    result_wait = await db.execute(stmt_wait)
+    now = _utcnow()
+    waits = [
+        (now - row).total_seconds() / 3600
+        for row in result_wait.scalars()
+        if row
+    ]
+    avg_wait = sum(waits) / len(waits) if waits else 0.0
+
+    # Top 5 des motifs de rejet
+    stmt_reasons = (
+        select(
+            VerificationRequest.rejection_reason,
+            func.count(VerificationRequest.id).label("count"),
+        )
+        .where(VerificationRequest.status == "rejected")
+        .where(VerificationRequest.rejection_reason.isnot(None))
+        .group_by(VerificationRequest.rejection_reason)
+        .order_by(func.count(VerificationRequest.id).desc())
+        .limit(5)
+    )
+    result_reasons = await db.execute(stmt_reasons)
+    top_reasons = [
+        {"reason": row[0], "count": row[1]}
+        for row in result_reasons.all()
+    ]
+
+    return {
+        "total": total,
+        "pending": counts["pending"],
+        "approved": counts["approved"],
+        "rejected": counts["rejected"],
+        "approval_rate": round(approval_rate, 1),
+        "average_wait_hours": round(avg_wait, 1),
+        "rejection_reasons_top": top_reasons,
+    }

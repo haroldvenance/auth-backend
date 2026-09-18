@@ -232,3 +232,86 @@ class VerificationStatusResponse(BaseModel):
     attempts: int
     max_attempts: int
     latest_request: VerificationLatestInfo | None = None
+    
+    
+    
+    
+# ============================================================
+# Admin — Vérifications
+# ============================================================
+class VerificationAdminListItem(BaseModel):
+    """Résumé d'une demande dans la file d'attente admin."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    user_email: EmailStr | None = None
+    user_display_name: str
+    full_name: str
+    document_type: str
+    status: str
+    created_at: datetime
+    reviewed_at: datetime | None = None
+    waiting_hours: float = 0.0
+    attempts: int = 0
+
+
+class VerificationAdminListResponse(BaseModel):
+    """Liste paginée de demandes."""
+    items: list[VerificationAdminListItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class VerificationAdminDetailResponse(BaseModel):
+    """Détails complets d'une demande pour un admin."""
+    id: UUID
+    user_id: UUID
+    user_email: EmailStr | None = None
+    user_display_name: str
+    user_created_at: datetime
+    user_verified: bool
+
+    full_name: str
+    date_of_birth: datetime | None = None
+    document_type: str
+    status: str
+    rejection_reason: str | None = None
+    admin_notes: str | None = None
+
+    # URLs signées (temporaires) vers les images déchiffrées
+    selfie_url: str
+    document_front_url: str
+    document_back_url: str | None = None
+
+    created_at: datetime
+    reviewed_at: datetime | None = None
+    reviewed_by: UUID | None = None
+    waiting_hours: float = 0.0
+
+
+class VerificationRejectRequest(BaseModel):
+    """Motif de rejet d'une demande."""
+    reason: str = Field(min_length=5, max_length=500)
+    admin_notes: str | None = Field(default=None, max_length=1000)
+
+
+class VerificationActionResponse(BaseModel):
+    """Réponse après approve/reject."""
+    success: bool = True
+    message: str
+    request_id: UUID
+    status: str
+
+
+class VerificationStatsResponse(BaseModel):
+    """Statistiques pour le back-office."""
+    total: int
+    pending: int
+    approved: int
+    rejected: int
+    approval_rate: float
+    average_wait_hours: float
+    rejection_reasons_top: list[dict]

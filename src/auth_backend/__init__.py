@@ -33,9 +33,8 @@ def setup_auth(
     # === Routers ===
  
     
-    
-    
     from .routers import (
+        admin as admin_router,
         auth as auth_router,
         otp as otp_router,
         passkeys as passkeys_router,
@@ -47,6 +46,7 @@ def setup_auth(
     app.include_router(totp_router.router, prefix=api_prefix)
     app.include_router(passkeys_router.router, prefix=api_prefix)
     app.include_router(verification_router.router, prefix=api_prefix)
+    app.include_router(admin_router.router, prefix=api_prefix)
     
 
     # === Route de santé ===

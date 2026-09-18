@@ -102,7 +102,51 @@ async def client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
         
-        
+ 
+
+
+
+@pytest_asyncio.fixture
+async def admin_client(app, db_engine) -> AsyncGenerator[AsyncClient, None]:
+    """Client HTTP dont l'utilisateur est admin."""
+    from auth_backend.database import get_db  # noqa
+    from auth_backend import database
+    from auth_backend.models import User
+    from sqlalchemy import select
+
+    # Créer un admin via l'API
+    admin_data = {
+        "email": "admin@example.com",
+        "display_name": "Admin User",
+        "password": "AdminPassword123!",
+    }
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        # Inscription
+        await c.post("/api/v1/auth/register", json=admin_data)
+
+        # Passer is_admin=True en DB
+        session_factory = database._session_factory
+        assert session_factory is not None
+        async with session_factory() as session:
+            stmt = select(User).where(User.email == "admin@example.com")
+            result = await session.execute(stmt)
+            user = result.scalar_one_or_none()
+            if user:
+                user.is_admin = True
+                await session.commit()
+
+        # Connexion
+        login = await c.post(
+            "/api/v1/auth/token",
+            data={"username": "admin@example.com", "password": "AdminPassword123!"},
+        )
+        token = login.json()["access_token"]
+
+        # Ajouter le header par défaut
+        c.headers["Authorization"] = f"Bearer {token}"
+        yield c 
         
         
         
