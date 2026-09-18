@@ -23,6 +23,7 @@ TEST_DATABASE_URL = (
     
 @pytest.fixture
 def config() -> AuthConfig:
+    
     return AuthConfig(
         database_url=TEST_DATABASE_URL,
         secret_key="test-secret-key-with-at-least-32-characters-long",
@@ -32,8 +33,11 @@ def config() -> AuthConfig:
         smtp_user="",
         smtp_password="",
         db_use_null_pool=True,
-        email_console_fallback=True,   # ← ajout
-        otp_rate_limit_per_hour=5,      # ← ajout
+        email_console_fallback=True,
+        otp_rate_limit_per_hour=5,
+        webauthn_rp_id="test",
+        webauthn_rp_name="Auth Test",
+        webauthn_origin="http://test",
     )
 
 

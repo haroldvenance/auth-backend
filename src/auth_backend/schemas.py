@@ -122,3 +122,72 @@ class TOTPStatusResponse(BaseModel):
 class TOTPRecoveryRequest(BaseModel):
     email: EmailStr
     recovery_code: str = Field(min_length=8, max_length=32)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+# ============================================================
+# Passkeys / WebAuthn
+# ============================================================
+class PasskeyResponse(BaseModel):
+    """Représentation d'une passkey enregistrée."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    device_name: str | None = None
+    created_at: datetime
+    last_used_at: datetime | None = None
+
+
+class RegistrationBeginResponse(BaseModel):
+    """Options renvoyées au client pour démarrer l'enregistrement.
+
+    Le contenu exact est un objet PublicKeyCredentialCreationOptions
+    sérialisé en JSON (clé `options`).
+    """
+    options: dict
+
+
+class RegistrationFinishRequest(BaseModel):
+    """Réponse du navigateur après création d'une passkey."""
+    credential: dict
+    device_name: str | None = Field(default=None, max_length=100)
+
+
+class AuthenticationBeginRequest(BaseModel):
+    """Démarrage de l'authentification.
+
+    Si `email` est fourni, on restreint aux credentials de cet utilisateur.
+    Sinon, on utilise des credentials discoverable (passkey sans email).
+    """
+    email: EmailStr | None = None
+
+
+class AuthenticationBeginResponse(BaseModel):
+    options: dict
+
+
+class AuthenticationFinishRequest(BaseModel):
+    """Réponse du navigateur après authentification."""
+    credential: dict
+
+
+class AuthenticationFinishResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: "UserResponse"
+
+
+class PasskeyRenameRequest(BaseModel):
+    device_name: str = Field(min_length=1, max_length=100)
+
+
+# Résolution de la référence circulaire
+AuthenticationFinishResponse.model_rebuild()

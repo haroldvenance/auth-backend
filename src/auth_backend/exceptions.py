@@ -185,3 +185,46 @@ class RecoveryCodesExhaustedError(AuthError):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Tous vos codes de secours ont été utilisés.",
         )
+        
+        
+        
+        
+        
+class WebAuthnChallengeNotFoundError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucun challenge WebAuthn en cours. Réessayez.",
+        )
+
+
+class WebAuthnVerificationError(AuthError):
+    def __init__(self, detail: str = "Vérification WebAuthn échouée.") -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
+class PasskeyNotFoundError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cette passkey n'existe pas ou ne vous appartient pas.",
+        )
+
+
+class PasskeyAlreadyExistsError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cette passkey est déjà enregistrée.",
+        )
+
+
+class NoPasskeyForUserError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucune passkey enregistrée pour cet utilisateur.",
+        )

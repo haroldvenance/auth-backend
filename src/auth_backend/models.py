@@ -80,6 +80,10 @@ class User(Base):
         cascade="all, delete-orphan",
         foreign_keys="RefreshToken.user_id",
     )
+    webauthn_challenges: Mapped[list["WebAuthnChallenge"]] = relationship(
+        cascade="all, delete-orphan",
+        foreign_keys="WebAuthnChallenge.user_id",
+    )
 
     def __repr__(self) -> str:
         return f"<User {self.id} email={self.email} verified={self.is_verified}>"
@@ -245,4 +249,35 @@ class VerificationRequest(Base):
             unique=True,
             postgresql_where=(status == "approved"),
         ),
+    )
+    
+    
+    
+    
+    
+# ============================================================
+# Challenges WebAuthn (stockage temporaire pour vérification)
+# ============================================================
+class WebAuthnChallenge(Base):
+    __tablename__ = "auth_webauthn_challenges"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("auth_users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    challenge: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    challenge_type: Mapped[str] = mapped_column(
+        String(20), nullable=False,
+    )  # "registration" | "authentication"
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
     )
