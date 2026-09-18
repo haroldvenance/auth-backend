@@ -191,3 +191,44 @@ class PasskeyRenameRequest(BaseModel):
 
 # Résolution de la référence circulaire
 AuthenticationFinishResponse.model_rebuild()
+
+
+
+
+
+
+
+
+
+# ============================================================
+# Vérification d'identité
+# ============================================================
+class VerificationRequestResponse(BaseModel):
+    """Détails d'une demande de vérification."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    full_name: str
+    document_type: str
+    status: str
+    rejection_reason: str | None = None
+    created_at: datetime
+    reviewed_at: datetime | None = None
+
+
+class VerificationLatestInfo(BaseModel):
+    id: str
+    status: str
+    document_type: str
+    created_at: str
+    reviewed_at: str | None = None
+    rejection_reason: str | None = None
+
+
+class VerificationStatusResponse(BaseModel):
+    """Statut de vérification d'un utilisateur."""
+    status: str  # unverified | pending | verified | rejected
+    is_verified: bool
+    attempts: int
+    max_attempts: int
+    latest_request: VerificationLatestInfo | None = None

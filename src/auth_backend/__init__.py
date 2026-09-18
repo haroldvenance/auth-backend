@@ -34,22 +34,30 @@ def setup_auth(
  
     
     
+    
     from .routers import (
         auth as auth_router,
         otp as otp_router,
         passkeys as passkeys_router,
         totp as totp_router,
+        verification as verification_router,
     )
     app.include_router(auth_router.router, prefix=api_prefix)
     app.include_router(otp_router.router, prefix=api_prefix)
     app.include_router(totp_router.router, prefix=api_prefix)
     app.include_router(passkeys_router.router, prefix=api_prefix)
+    app.include_router(verification_router.router, prefix=api_prefix)
     
 
     # === Route de santé ===
     @app.get(f"{api_prefix}/health", tags=["auth"])
     async def auth_health() -> dict:
         return {"status": "ok", "module": "auth-backend", "version": __version__}
+        
+        
+        
+        
+     
         
         
         

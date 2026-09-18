@@ -228,3 +228,76 @@ class NoPasskeyForUserError(AuthError):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Aucune passkey enregistrée pour cet utilisateur.",
         )
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+class VerificationAlreadyPendingError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Une demande de vérification est déjà en cours.",
+        )
+
+
+class VerificationAlreadyVerifiedError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Votre compte est déjà vérifié.",
+        )
+
+
+class VerificationMaxAttemptsError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Nombre maximum de tentatives atteint. Contactez le support.",
+        )
+
+
+class VerificationDuplicateDocumentError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce document a déjà été utilisé pour vérifier un autre compte.",
+        )
+
+
+class VerificationNotFoundError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aucune demande de vérification trouvée.",
+        )
+
+
+class VerificationFileTooLargeError(AuthError):
+    def __init__(self, max_mb: int) -> None:
+        super().__init__(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Fichier trop volumineux (maximum {max_mb} Mo).",
+        )
+
+
+class VerificationInvalidFileTypeError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Type de fichier non supporté. Utilisez JPEG, PNG ou WebP.",
+        )
+
+
+class StorageError(AuthError):
+    def __init__(self, detail: str = "Erreur de stockage.") -> None:
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=detail,
+        )

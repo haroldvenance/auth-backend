@@ -19,11 +19,10 @@ TEST_DATABASE_URL = (
 
 
     
-    
-    
 @pytest.fixture
-def config() -> AuthConfig:
-    
+def config(tmp_path) -> AuthConfig:
+    from cryptography.fernet import Fernet
+
     return AuthConfig(
         database_url=TEST_DATABASE_URL,
         secret_key="test-secret-key-with-at-least-32-characters-long",
@@ -38,6 +37,11 @@ def config() -> AuthConfig:
         webauthn_rp_id="test",
         webauthn_rp_name="Auth Test",
         webauthn_origin="http://test",
+        # Vérification d'identité
+        verification_encryption_key=Fernet.generate_key().decode(),
+        verification_storage_path=str(tmp_path / "storage" / "verifications"),
+        verification_upload_max_mb=5,
+        verification_max_attempts=3,
     )
 
 
