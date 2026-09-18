@@ -17,9 +17,17 @@ from ..exceptions import (
     VerificationNotFoundError,
 )
 
+
+
 from ..models import User, VerificationRequest
 from ..security import hash_document_number
 from .storage_service import StorageService
+
+from ..email.sender import EmailSender
+from ..email.templates import (
+    verification_approved_email,
+    verification_rejected_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -361,6 +369,7 @@ async def approve_request(
     db: AsyncSession,
     request_id: "UUID",
     admin: User,
+    config: AuthConfig,
     admin_notes: str | None = None,
 ) -> VerificationRequest:
     """Approuve une demande et marque l'utilisateur comme vérifié."""
@@ -372,7 +381,8 @@ async def approve_request(
 
     if req.status != "pending":
         raise VerificationAdminActionError(
-            f"Cette demande est déjà '{req.status}'. Seules les demandes 'pending' peuvent être traitées."
+            f"Cette demande est déjà '{req.status}'. "
+            "Seules les demandes 'pending' peuvent être traitées."
         )
 
     req.status = "approved"
@@ -391,7 +401,29 @@ async def approve_request(
 
     await db.commit()
     await db.refresh(req)
+
+    # Notification par email (best effort)
+    if user and user.email:
+        try:
+            subject, body_text, body_html = verification_approved_email(
+                display_name=user.display_name,
+                app_name=config.totp_issuer,
+            )
+            sender = EmailSender(config)
+            await sender.send(
+                to=user.email,
+                subject=subject,
+                body_text=body_text,
+                body_html=body_html,
+            )
+        except Exception as exc:
+            logger.error("Échec envoi notification approbation à %s : %s",
+                         user.email, exc)
+
     return req
+
+
+
 
 
 async def reject_request(
@@ -399,6 +431,7 @@ async def reject_request(
     request_id: "UUID",
     admin: User,
     reason: str,
+    config: AuthConfig,
     admin_notes: str | None = None,
 ) -> VerificationRequest:
     """Rejette une demande avec un motif."""
@@ -422,13 +455,40 @@ async def reject_request(
 
     # Mettre à jour l'utilisateur
     user = await db.get(User, req.user_id)
+    attempts_remaining = 0
     if user:
         user.verification_status = "rejected"
         user.updated_at = _utcnow()
+        attempts_remaining = max(0, config.verification_max_attempts - user.verification_attempts)
 
     await db.commit()
     await db.refresh(req)
+
+    # Notification par email (best effort)
+    if user and user.email:
+        try:
+            subject, body_text, body_html = verification_rejected_email(
+                display_name=user.display_name,
+                reason=reason,
+                attempts_remaining=attempts_remaining,
+                app_name=config.totp_issuer,
+            )
+            sender = EmailSender(config)
+            await sender.send(
+                to=user.email,
+                subject=subject,
+                body_text=body_text,
+                body_html=body_html,
+            )
+        except Exception as exc:
+            logger.error("Échec envoi notification rejet à %s : %s",
+                         user.email, exc)
+
     return req
+    
+    
+    
+   
 
 
 async def get_stats(db: AsyncSession) -> dict:
@@ -490,4 +550,81 @@ async def get_stats(db: AsyncSession) -> dict:
         "approval_rate": round(approval_rate, 1),
         "average_wait_hours": round(avg_wait, 1),
         "rejection_reasons_top": top_reasons,
+    }
+    
+    
+    
+    
+    
+# ============================================================
+# Nettoyage
+# ============================================================
+async def cleanup_expired_documents(
+    db: AsyncSession,
+    config: AuthConfig,
+    *,
+    dry_run: bool = False,
+) -> dict:
+    """Supprime les documents de vérification plus vieux que la rétention.
+
+    Supprime les fichiers chiffrés (selfie, document_front, document_back)
+    pour toutes les demandes dont `reviewed_at` est plus ancien que
+    `config.verification_retention_days`. Les enregistrements en DB sont
+    conservés (seuls les chemins sont effacés).
+
+    Args:
+        dry_run: si True, ne supprime rien mais liste ce qui serait supprimé.
+    """
+    retention_days = config.verification_retention_days
+    cutoff = _utcnow() - timedelta(days=retention_days)
+
+    stmt = select(VerificationRequest).where(
+        VerificationRequest.reviewed_at.isnot(None),
+        VerificationRequest.reviewed_at < cutoff,
+        VerificationRequest.selfie_path != "",
+    )
+    result = await db.execute(stmt)
+    requests = list(result.scalars())
+
+    storage = StorageService(config)
+    deleted_files = 0
+    errors = 0
+    cleaned_ids: list[str] = []
+
+    for req in requests:
+        paths = [
+            req.selfie_path,
+            req.document_front_path,
+            req.document_back_path,
+        ]
+        for path in paths:
+            if not path:
+                continue
+            if dry_run:
+                deleted_files += 1
+                continue
+            try:
+                storage.delete_file(path)
+                deleted_files += 1
+            except Exception as exc:
+                logger.warning("Échec suppression %s : %s", path, exc)
+                errors += 1
+
+        if not dry_run:
+            # Effacer les chemins en DB pour éviter de retenter
+            req.selfie_path = ""
+            req.document_front_path = ""
+            req.document_back_path = None
+            cleaned_ids.append(str(req.id))
+
+    if not dry_run:
+        await db.commit()
+
+    return {
+        "requests_cleaned": len(cleaned_ids) if not dry_run else len(requests),
+        "files_deleted": deleted_files,
+        "errors": errors,
+        "retention_days": retention_days,
+        "dry_run": dry_run,
+        "request_ids": cleaned_ids,
     }

@@ -64,9 +64,10 @@ async def approve_verification(
     request_id: UUID,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
+    config: AuthConfig = Depends(get_auth_config),
 ) -> VerificationActionResponse:
     """Approuve la demande et marque l'utilisateur comme vérifié."""
-    req = await verification_service.approve_request(db, request_id, admin)
+    req = await verification_service.approve_request(db, request_id, admin, config)
     return VerificationActionResponse(
         success=True,
         message="Demande approuvée.",
@@ -85,10 +86,12 @@ async def reject_verification(
     data: VerificationRejectRequest,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
+    config: AuthConfig = Depends(get_auth_config),
 ) -> VerificationActionResponse:
     """Rejette la demande avec un motif."""
     req = await verification_service.reject_request(
-        db, request_id, admin, reason=data.reason, admin_notes=data.admin_notes
+        db, request_id, admin, reason=data.reason, config=config,
+        admin_notes=data.admin_notes,
     )
     return VerificationActionResponse(
         success=True,
@@ -110,3 +113,30 @@ async def get_stats(
     """Statistiques globales (compteurs, taux, délais)."""
     data = await verification_service.get_stats(db)
     return VerificationStatsResponse(**data)
+
+
+
+
+
+
+@router.post(
+    "/cleanup",
+    summary="Nettoyer les documents expirés",
+)
+async def cleanup_documents(
+    dry_run: bool = Query(default=False, description="Simulation sans suppression"),
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    config: AuthConfig = Depends(get_auth_config),
+) -> dict:
+    """Supprime les documents de vérification plus vieux que la rétention.
+
+    Utilisez `?dry_run=true` pour voir ce qui serait supprimé sans
+    effectivement supprimer.
+    """
+    return await verification_service.cleanup_expired_documents(
+        db, config, dry_run=dry_run
+    )
+
+
+
