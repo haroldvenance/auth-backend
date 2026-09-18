@@ -17,13 +17,12 @@ TEST_DATABASE_URL = (
 )
 
 
+
+    
+    
+    
 @pytest.fixture
 def config() -> AuthConfig:
-    """Configuration dédiée aux tests.
-
-    Utilise NullPool pour éviter les conflits de boucle asyncio
-    entre les tests (chaque test a sa propre boucle).
-    """
     return AuthConfig(
         database_url=TEST_DATABASE_URL,
         secret_key="test-secret-key-with-at-least-32-characters-long",
@@ -33,6 +32,8 @@ def config() -> AuthConfig:
         smtp_user="",
         smtp_password="",
         db_use_null_pool=True,
+        email_console_fallback=True,   # ← ajout
+        otp_rate_limit_per_hour=5,      # ← ajout
     )
 
 
@@ -92,3 +93,16 @@ async def client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        

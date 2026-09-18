@@ -52,3 +52,29 @@ class RefreshResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+
+
+
+# ============================================================
+# OTP
+# ============================================================
+class OTPRequest(BaseModel):
+    email: EmailStr
+    purpose: str = Field(
+        default="login",
+        pattern="^(login|verify_email|reset_password)$",
+    )
+
+
+class OTPVerifyRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=10)
+    purpose: str = Field(
+        default="login",
+        pattern="^(login|verify_email|reset_password)$",
+    )
+
+
+class OTPResponse(BaseModel):
+    success: bool = True
+    message: str

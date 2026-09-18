@@ -79,3 +79,56 @@ class MissingIdentifierError(AuthError):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Un email ou un numéro de téléphone est requis",
         )
+
+
+
+
+
+
+
+class OTPExpiredError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce code a expiré. Demandez-en un nouveau.",
+        )
+
+
+class OTPInvalidError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Code incorrect.",
+        )
+
+
+class OTPAlreadyUsedError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce code a déjà été utilisé.",
+        )
+
+
+class OTPMaxAttemptsError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trop de tentatives. Demandez un nouveau code.",
+        )
+
+
+class OTPRateLimitError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trop de demandes de code. Réessayez dans une heure.",
+        )
+
+
+class EmailNotConfiguredError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Le service d'email n'est pas configuré.",
+        )

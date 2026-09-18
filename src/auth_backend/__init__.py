@@ -4,6 +4,9 @@ from fastapi import FastAPI
 from .config import AuthConfig, get_config
 from .database import close_db, init_db
 
+
+
+
 __version__ = "0.1.0"
 
 __all__ = [
@@ -28,8 +31,9 @@ def setup_auth(
     init_db(cfg)
 
     # === Routers ===
-    from .routers import auth as auth_router
+    from .routers import auth as auth_router, otp as otp_router
     app.include_router(auth_router.router, prefix=api_prefix)
+    app.include_router(otp_router.router, prefix=api_prefix)
 
     # === Route de santé ===
     @app.get(f"{api_prefix}/health", tags=["auth"])

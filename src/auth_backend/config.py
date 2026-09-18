@@ -50,8 +50,8 @@ class AuthConfig(BaseSettings):
     otp_expire_minutes: int = Field(default=10, ge=1, le=60)
     otp_max_attempts: int = Field(default=5, ge=1, le=10)
     otp_rate_limit_per_hour: int = Field(default=5, ge=1, le=20)
-
-    # ===== SMTP =====
+    
+        # ===== SMTP =====
     smtp_host: str = Field(default="smtp-relay.brevo.com")
     smtp_port: int = Field(default=587, ge=1, le=65535)
     smtp_user: str = Field(default="")
@@ -59,6 +59,13 @@ class AuthConfig(BaseSettings):
     smtp_use_tls: bool = Field(default=True)
     email_from: str = Field(default="noreply@example.com")
     email_from_name: str = Field(default="Auth Module")
+    email_console_fallback: bool = Field(
+        default=False,
+        description=(
+            "Si True, affiche les emails dans la console au lieu de les envoyer "
+            "via SMTP. Utile en dev/test."
+        ),
+    )
 
     # ===== TOTP =====
     totp_issuer: str = Field(default="AuthModule", description="Nom affiché dans l'app authenticator")
@@ -113,3 +120,9 @@ class AuthConfig(BaseSettings):
 def get_config() -> AuthConfig:
     """Retourne une instance unique (singleton) de la configuration."""
     return AuthConfig()
+    
+    
+    
+    
+    
+    

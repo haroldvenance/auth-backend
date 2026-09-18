@@ -130,8 +130,9 @@ class OTPCode(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("auth_users.id", ondelete="CASCADE"), index=True,
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("auth_users.id", ondelete="CASCADE"),
+        nullable=True, index=True,
     )
 
     email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
@@ -145,8 +146,8 @@ class OTPCode(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False,
     )
-
-    user: Mapped["User"] = relationship(
+    
+    user: Mapped["User | None"] = relationship(
         back_populates="otp_codes",
         foreign_keys=[user_id],
     )
