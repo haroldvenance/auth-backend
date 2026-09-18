@@ -78,3 +78,47 @@ class OTPVerifyRequest(BaseModel):
 class OTPResponse(BaseModel):
     success: bool = True
     message: str
+    
+    
+    
+    
+    
+# ============================================================
+# TOTP
+# ============================================================
+class TOTPSetupResponse(BaseModel):
+    """Retourné par /totp/setup — contient le secret et le QR code."""
+    secret: str = Field(description="Secret base32 à conserver précieusement")
+    otpauth_url: str = Field(description="URL otpauth:// à utiliser pour le QR code")
+    qr_code_data_url: str = Field(
+        description="QR code encodé en data URL (image/png;base64,...)"
+    )
+
+
+class TOTPVerifyRequest(BaseModel):
+    """Vérifie un code TOTP à 6 chiffres."""
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class TOTPVerifyResponse(BaseModel):
+    success: bool = True
+    message: str
+    recovery_codes: list[str] | None = Field(
+        default=None,
+        description="Codes de secours générés. Affichés une seule fois.",
+    )
+
+
+class TOTPDisableRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class TOTPStatusResponse(BaseModel):
+    enabled: bool
+    recovery_codes_remaining: int = 0
+    setup_in_progress: bool = False
+
+
+class TOTPRecoveryRequest(BaseModel):
+    email: EmailStr
+    recovery_code: str = Field(min_length=8, max_length=32)

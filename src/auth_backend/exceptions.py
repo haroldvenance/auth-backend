@@ -132,3 +132,56 @@ class EmailNotConfiguredError(AuthError):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Le service d'email n'est pas configuré.",
         )
+        
+        
+        
+        
+        
+        
+        
+class TOTPAlreadyEnabledError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Le TOTP est déjà activé sur ce compte.",
+        )
+
+
+class TOTPNotEnabledError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le TOTP n'est pas activé sur ce compte.",
+        )
+
+
+class TOTPSetupNotStartedError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucun enrôlement TOTP en cours. Appelez /totp/setup d'abord.",
+        )
+
+
+class TOTPInvalidCodeError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Code TOTP invalide.",
+        )
+
+
+class RecoveryCodeInvalidError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Code de secours invalide ou déjà utilisé.",
+        )
+
+
+class RecoveryCodesExhaustedError(AuthError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tous vos codes de secours ont été utilisés.",
+        )
